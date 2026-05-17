@@ -51,7 +51,7 @@ class Tank(Entity):
         self.max_health = self.health
         self.velocity = Vec3(0, 0, 0)
         self.rotation_y = 0
-        self.shoot_cooldown = 0
+        self.shoot_timer = 0.0
         self.speed = PLAYER_SPEED if is_player else ENEMY_SPEED
         
         # Turret
@@ -103,12 +103,12 @@ class Tank(Entity):
         destroy(self.health_bar_bg)
     
     def shoot(self):
-        if self.shoot_cooldown <= 0:
+        if self.shoot_timer <= 0:
             turret_world_pos = self.turret.world_position
             direction = self.get_turret_direction()
             projectile = Projectile(turret_world_pos, direction, owner=self)
             projectiles.append(projectile)
-            self.shoot_cooldown = 0.5
+            self.shoot_timer = 0.5
     
     def get_turret_direction(self):
         # Calculate direction based on tank rotation and turret angle
@@ -191,8 +191,8 @@ def input(key):
 def update():
     global player_health, score, level, enemies_defeated
     
-    # Update player cooldown
-    player_tank.shoot_cooldown -= time.dt()
+    # Update player shoot timer
+    player_tank.shoot_timer -= time.dt()
     
     # Update player movement (friction)
     player_tank.velocity *= FRICTION
@@ -222,9 +222,9 @@ def update():
         enemy.position.z = clamp(enemy.position.z, -GAME_HEIGHT/2, GAME_HEIGHT/2)
         
         # AI: Shoot at player occasionally
-        enemy.shoot_cooldown -= time.dt()
+        enemy.shoot_timer -= time.dt()
         dist_to_player = distance_between(enemy.position, player_tank.position)
-        if dist_to_player < 30 and enemy.shoot_cooldown <= 0:
+        if dist_to_player < 30 and enemy.shoot_timer <= 0:
             direction = (player_tank.position - enemy.position).normalized()
             enemy.turret.rotation = (0, math.degrees(math.atan2(direction.x, direction.z)), 0)
             enemy.shoot()
