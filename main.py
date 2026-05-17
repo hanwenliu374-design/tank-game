@@ -4,7 +4,6 @@ Features: Player tank, AI enemies, physics, collision, health system
 """
 
 from ursina import *
-from ursina.prefabs.first_person_controller import FirstPersonController
 import random
 import math
 
@@ -24,17 +23,19 @@ PROJECTILE_SPEED = 60
 FRICTION = 0.95
 
 # Game State
-player_health = PLAYER_HEALTH
+game_score = 0
+game_level = 1
+enemies_defeated = 0
 enemies = []
 projectiles = []
-score = 0
-level = 1
-enemies_defeated = 0
 
 # ============= UTILITY FUNCTIONS =============
-def distance_between(pos1, pos2):
+def calc_distance(pos1, pos2):
     """Calculate distance between two 3D positions"""
-    return math.sqrt((pos1[0] - pos2[0])**2 + (pos1[1] - pos2[1])**2 + (pos1[2] - pos2[2])**2)
+    dx = pos1[0] - pos2[0]
+    dy = pos1[1] - pos2[1]
+    dz = pos1[2] - pos2[2]
+    return math.sqrt(dx*dx + dy*dy + dz*dz)
 
 # ============= TANK CLASS =============
 class Tank(Entity):
@@ -51,7 +52,7 @@ class Tank(Entity):
         self.max_health = self.health
         self.velocity = Vec3(0, 0, 0)
         self.rotation_y = 0
-        self.shoot_timer = 0.0
+        self.shoot_delay = 0.0
         self.speed = PLAYER_SPEED if is_player else ENEMY_SPEED
         
         # Turret
@@ -91,8 +92,8 @@ class Tank(Entity):
         else:
             self.health_bar.color = color.red
     
-    def take_damage(self, damage):
-        self.health -= damage
+    def take_damage(self, dmg):
+        self.health -= dmg
         self.update_health_bar()
         if self.health <= 0:
             self.die()
@@ -103,22 +104,21 @@ class Tank(Entity):
         destroy(self.health_bar_bg)
     
     def shoot(self):
-        if self.shoot_timer <= 0:
+        if self.shoot_delay <= 0:
             turret_world_pos = self.turret.world_position
             direction = self.get_turret_direction()
-            projectile = Projectile(turret_world_pos, direction, owner=self)
-            projectiles.append(projectile)
-            self.shoot_timer = 0.5
+            proj = Projectile(turret_world_pos, direction, owner=self)
+            projectiles.append(proj)
+            self.shoot_delay = 0.5
     
     def get_turret_direction(self):
-        # Calculate direction based on tank rotation and turret angle
         angle_rad = math.radians(self.rotation_y)
         direction = Vec3(math.sin(angle_rad), 0, math.cos(angle_rad))
         return direction.normalized()
 
 # ============= PROJECTILE CLASS =============
 class Projectile(Entity):
-    def __init__(self, pos, direction, owner, damage=20):
+    def __init__(self, pos, direction, owner, dmg=20):
         super().__init__()
         self.position = pos + direction * 2
         self.model = 'sphere'
@@ -127,8 +127,8 @@ class Projectile(Entity):
         
         self.velocity = direction * PROJECTILE_SPEED
         self.owner = owner
-        self.damage = damage
-        self.lifetime = 10
+        self.damage = dmg
+        self.lifetime = 10.0
         self.gravity = -20
     
     def update(self):
@@ -141,8 +141,9 @@ class Projectile(Entity):
         self.position += self.velocity * time.dt()
         
         # Check collisions with tanks
-        for tank in enemies if self.owner.is_player else [player_tank]:
-            dist = distance_between(self.position, tank.position)
+        target_list = enemies if self.owner.is_player else [player_tank]
+        for tank in target_list:
+            dist = calc_distance(self.position, tank.position)
             if dist < 1.5:
                 tank.take_damage(self.damage)
                 destroy(self)
@@ -156,22 +157,21 @@ class Projectile(Entity):
 player_tank = Tank(0, 0, is_player=True, tank_color=color.blue)
 
 # ============= SPAWN ENEMIES =============
-def spawn_enemies():
-    global enemies
+def spawn_enemies_func():
+    global enemies, game_level
     enemies = []
-    num_enemies = 2 + level
+    num_enemies = 2 + game_level
     for _ in range(num_enemies):
         x = random.uniform(-GAME_WIDTH/2 + 5, GAME_WIDTH/2 - 5)
         z = random.uniform(-GAME_HEIGHT/2 + 5, GAME_HEIGHT/2 - 5)
-        if distance_between((x, 0.5, z), (0, 0.5, 0)) > 15:
+        if calc_distance((x, 0.5, z), (0, 0.5, 0)) > 15:
             enemy = Tank(x, z, is_player=False, tank_color=color.red)
             enemies.append(enemy)
 
-spawn_enemies()
+spawn_enemies_func()
 
 # ============= INPUT & CONTROLS =============
 def input(key):
-    global score
     if key == 'w':
         direction = player_tank.get_turret_direction()
         player_tank.velocity = direction * player_tank.speed
@@ -189,10 +189,10 @@ def input(key):
 
 # ============= MAIN UPDATE LOOP =============
 def update():
-    global player_health, score, level, enemies_defeated
+    global game_score, game_level, enemies_defeated
     
-    # Update player shoot timer
-    player_tank.shoot_timer -= time.dt()
+    # Update player shoot delay
+    player_tank.shoot_delay -= time.dt()
     
     # Update player movement (friction)
     player_tank.velocity *= FRICTION
@@ -222,9 +222,9 @@ def update():
         enemy.position.z = clamp(enemy.position.z, -GAME_HEIGHT/2, GAME_HEIGHT/2)
         
         # AI: Shoot at player occasionally
-        enemy.shoot_timer -= time.dt()
-        dist_to_player = distance_between(enemy.position, player_tank.position)
-        if dist_to_player < 30 and enemy.shoot_timer <= 0:
+        enemy.shoot_delay -= time.dt()
+        dist_to_player = calc_distance(enemy.position, player_tank.position)
+        if dist_to_player < 30 and enemy.shoot_delay <= 0:
             direction = (player_tank.position - enemy.position).normalized()
             enemy.turret.rotation = (0, math.degrees(math.atan2(direction.x, direction.z)), 0)
             enemy.shoot()
@@ -233,36 +233,36 @@ def update():
         if enemy.health <= 0:
             enemies.remove(enemy)
             enemies_defeated += 1
-            score += 10
+            game_score += 10
     
     # Update projectiles
-    for projectile in projectiles[:]:
-        if projectile:
-            projectile.update()
+    for proj in projectiles[:]:
+        if proj:
+            proj.update()
         else:
-            if projectile in projectiles:
-                projectiles.remove(projectile)
+            if proj in projectiles:
+                projectiles.remove(proj)
     
     # Check level completion
     if len(enemies) == 0 and enemies_defeated > 0:
-        level += 1
-        spawn_enemies()
+        game_level += 1
+        spawn_enemies_func()
     
     # Check game over
     if player_tank.health <= 0:
-        print(f"GAME OVER! Final Score: {score}, Level: {level}")
+        print("GAME OVER! Final Score: {}, Level: {}".format(game_score, game_level))
         application.quit()
 
 # ============= UI =============
-score_text = Text(text=f'Score: {score}', position=(-0.9, 0.45), scale=2)
-health_text = Text(text=f'Health: {player_tank.health}', position=(-0.9, 0.4), scale=2)
-level_text = Text(text=f'Level: {level}', position=(-0.9, 0.35), scale=2)
+score_text = Text(text='Score: 0', position=(-0.9, 0.45), scale=2)
+health_text = Text(text='Health: 100', position=(-0.9, 0.4), scale=2)
+level_text = Text(text='Level: 1', position=(-0.9, 0.35), scale=2)
 controls_text = Text(text='W/A/S/D: Move | SPACE: Shoot | ESC: Quit', position=(-0.9, -0.45), scale=1.5)
 
 def update_ui():
-    score_text.text = f'Score: {score}'
-    health_text.text = f'Health: {max(0, int(player_tank.health))}'
-    level_text.text = f'Level: {level} | Enemies: {len(enemies)}'
+    score_text.text = 'Score: {}'.format(game_score)
+    health_text.text = 'Health: {}'.format(max(0, int(player_tank.health)))
+    level_text.text = 'Level: {} | Enemies: {}'.format(game_level, len(enemies))
 
 # Add ground
 ground = Entity(
