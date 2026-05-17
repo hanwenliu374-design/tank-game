@@ -31,6 +31,11 @@ score = 0
 level = 1
 enemies_defeated = 0
 
+# ============= UTILITY FUNCTIONS =============
+def distance_between(pos1, pos2):
+    """Calculate distance between two 3D positions"""
+    return math.sqrt((pos1[0] - pos2[0])**2 + (pos1[1] - pos2[1])**2 + (pos1[2] - pos2[2])**2)
+
 # ============= TANK CLASS =============
 class Tank(Entity):
     def __init__(self, x, z, is_player=False, tank_color=color.blue):
@@ -137,8 +142,8 @@ class Projectile(Entity):
         
         # Check collisions with tanks
         for tank in enemies if self.owner.is_player else [player_tank]:
-            distance = distance_between(self.position, tank.position)
-            if distance < 1.5:
+            dist = distance_between(self.position, tank.position)
+            if dist < 1.5:
                 tank.take_damage(self.damage)
                 destroy(self)
                 return
@@ -158,7 +163,7 @@ def spawn_enemies():
     for _ in range(num_enemies):
         x = random.uniform(-GAME_WIDTH/2 + 5, GAME_WIDTH/2 - 5)
         z = random.uniform(-GAME_HEIGHT/2 + 5, GAME_HEIGHT/2 - 5)
-        if distance_between((x, 0, z), (0, 0, 0)) > 15:
+        if distance_between((x, 0.5, z), (0, 0.5, 0)) > 15:
             enemy = Tank(x, z, is_player=False, tank_color=color.red)
             enemies.append(enemy)
 
@@ -218,8 +223,8 @@ def update():
         
         # AI: Shoot at player occasionally
         enemy.shoot_cooldown -= time.dt()
-        distance_to_player = distance_between(enemy.position, player_tank.position)
-        if distance_to_player < 30 and enemy.shoot_cooldown <= 0:
+        dist_to_player = distance_between(enemy.position, player_tank.position)
+        if dist_to_player < 30 and enemy.shoot_cooldown <= 0:
             direction = (player_tank.position - enemy.position).normalized()
             enemy.turret.rotation = (0, math.degrees(math.atan2(direction.x, direction.z)), 0)
             enemy.shoot()
