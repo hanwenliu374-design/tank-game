@@ -9,7 +9,7 @@ import random
 import math
 
 # Initialize game
-app = Ursina(title="Tank Battle 3D", icon="itch.io-favicon.png")
+app = Ursina(title="Tank Battle 3D")
 camera.position = (0, 15, -20)
 camera.rotation = (45, 0, 0)
 
@@ -33,12 +33,12 @@ enemies_defeated = 0
 
 # ============= TANK CLASS =============
 class Tank(Entity):
-    def __init__(self, x, z, is_player=False, color=color.blue):
+    def __init__(self, x, z, is_player=False, tank_color=color.blue):
         super().__init__()
         self.position = (x, 0.5, z)
         self.scale = (1.5, 1, 2)
         self.model = 'cube'
-        self.color = color
+        self.color = tank_color
         self.is_player = is_player
         
         # Tank properties
@@ -55,16 +55,16 @@ class Tank(Entity):
             model='cube',
             scale=(0.4, 0.4, 1.2),
             position=(0, 0.7, 0),
-            color=color
+            color=tank_color
         )
         
-        # Health bar
+        # Health bar background
         self.health_bar_bg = Entity(
             parent=self,
             model='quad',
             scale=(1.5, 0.1, 1),
             position=(0, 2, 0),
-            color=color.dark_gray
+            color=color.gray
         )
         self.health_bar = Entity(
             parent=self.health_bar_bg,
@@ -148,7 +148,7 @@ class Projectile(Entity):
             destroy(self)
 
 # ============= PLAYER TANK =============
-player_tank = Tank(0, 0, is_player=True, color=color.blue)
+player_tank = Tank(0, 0, is_player=True, tank_color=color.blue)
 
 # ============= SPAWN ENEMIES =============
 def spawn_enemies():
@@ -159,7 +159,7 @@ def spawn_enemies():
         x = random.uniform(-GAME_WIDTH/2 + 5, GAME_WIDTH/2 - 5)
         z = random.uniform(-GAME_HEIGHT/2 + 5, GAME_HEIGHT/2 - 5)
         if distance_between((x, 0, z), (0, 0, 0)) > 15:
-            enemy = Tank(x, z, is_player=False, color=color.red)
+            enemy = Tank(x, z, is_player=False, tank_color=color.red)
             enemies.append(enemy)
 
 spawn_enemies()
@@ -235,7 +235,8 @@ def update():
         if projectile:
             projectile.update()
         else:
-            projectiles.remove(projectile)
+            if projectile in projectiles:
+                projectiles.remove(projectile)
     
     # Check level completion
     if len(enemies) == 0 and enemies_defeated > 0:
@@ -263,15 +264,15 @@ ground = Entity(
     model='cube',
     scale=(GAME_WIDTH, 0.1, GAME_HEIGHT),
     position=(0, -0.5, 0),
-    color=color.dark_gray,
+    color=color.light_gray,
     collider='box'
 )
 
 # Add walls
 for x in [-GAME_WIDTH/2, GAME_WIDTH/2]:
-    Entity(model='cube', scale=(1, 2, GAME_WIDTH), position=(x, 1, 0), color=color.dark_green, collider='box')
+    Entity(model='cube', scale=(1, 2, GAME_HEIGHT), position=(x, 1, 0), color=color.green, collider='box')
 for z in [-GAME_HEIGHT/2, GAME_HEIGHT/2]:
-    Entity(model='cube', scale=(GAME_WIDTH, 2, 1), position=(0, 1, z), color=color.dark_green, collider='box')
+    Entity(model='cube', scale=(GAME_WIDTH, 2, 1), position=(0, 1, z), color=color.green, collider='box')
 
 # Add decorative obstacles
 for _ in range(5):
